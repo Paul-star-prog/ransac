@@ -46,6 +46,8 @@ def plot_epipolar_inliers(image1_path, image2_path, keypoints1, keypoints2, F,
     keypoints1 = np.column_stack((keypoints1, np.ones(len(keypoints1))))
     keypoints2 = np.column_stack((keypoints2, np.ones(len(keypoints2))))
 
+    # inlier_mask = np.random.choice(inlier_mask, 20)
+
     image1_inliers = keypoints1[inlier_mask, :]
     image2_inliers = keypoints2[inlier_mask, :]
 

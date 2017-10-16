@@ -26,7 +26,7 @@ np.random.seed(0)
 #                             confidence required to stop RANSAC
 # @param max_num_trials       initial maximum number of RANSAC iterations N
 #
-# @return best_model          the associated best model for the inliers
+# @return best_F          the associated best model for the inliers
 # @return inlier_mask         length M numpy boolean array with True indicating
 #                             that a data point is an inlier and False
 #                             otherwise; inliers can be recovered by taking
@@ -49,8 +49,9 @@ def ransac(data, inlier_threshold, confidence_threshold, max_num_trials):
         return np.array([u1*u2, u1*v2, u1, v1*u2, v1*v2, v1, u2, v2, 1])
 
     def make_hartley_matrix(left, right):
+        m = len(left)
         A = np.zeros((m, 9))
-        for i in len(left):
+        for i in xrange(m):
             A[i,:] = make_hartley_vector(left[i], right[i])
         return A
 
@@ -63,6 +64,16 @@ def ransac(data, inlier_threshold, confidence_threshold, max_num_trials):
         s[-1] = 0
         return u * np.diag(s) * vT
 
+    def compute_normalization_mat(pts):
+        translate = np.mean(pts, axis=0)
+        translated = pts - translate
+        distances = np.linalg.norm(translated, axis=1)
+        scale = np.sqrt(2) / np.mean(distances)
+        result = np.array([[scale,     0,     scale * -translate[0]],
+                           [    0, scale,     scale * -translate[1]],
+                           [    0,     0,                        1]])
+        return result
+
     def normalize_points(pts):
         # mean should be (0,0)
         res = pts - np.mean(pts, axis=0)
@@ -74,6 +85,30 @@ def ransac(data, inlier_threshold, confidence_threshold, max_num_trials):
         res /= scale
 
         return res
+
+    def apply_transform(T, pts):
+        ones = np.ones(len(pts))
+        homogenized = np.column_stack((pts, ones))
+        return np.dot(T, homogenized.T)
+
+    def hartley(points):
+        '''Run the entire Hartley algorithm from start to end'''
+        T1 = compute_normalization_mat(points[:,:2])
+        T2 = compute_normalization_mat(points[:,2:])
+
+        left_img_pts = apply_transform(T1, points[:,:2])[:2,:].T
+        right_img_pts = apply_transform(T1, points[:,2:])[:2,:].T
+
+        # np.mean(np.linalg.norm(left_img_pts, axis=1))
+        # np.mean(np.linalg.norm(right_img_pts, axis=1))
+        # these two should be roughly sqrt(2)
+
+        A = make_hartley_matrix(left_img_pts, right_img_pts)
+        F = compute_F(A)
+        F = enforce_rank_2(F)
+        F = np.dot(T2.T, np.dot(F, T1))
+
+        return F
 
 
     #--------------------------------------------------------------------------
@@ -98,25 +133,29 @@ def ransac(data, inlier_threshold, confidence_threshold, max_num_trials):
         #-----------------------------------------------------------------------
         # 2) fit a model to the sampled data subset
 
-        left_img_pts = normalize_points(data[:,:2])
-        right_img_pts = normalize_points(data[:,2:])
-
-        # np.mean(np.linalg.norm(left_img_pts, axis=1))
-        # np.mean(np.linalg.norm(right_img_pts, axis=1))
-        # these two should be roughly sqrt(2)
-
-        A = make_hartley_matrix(left_img_pts, right_img_pts)
-        F = compute_F(A)
-        F = enforce_rank_2(F)
-
+        F = hartley(points)
 
         #-----------------------------------------------------------------------
         # 3) determine the inliers to the model; store the result as a boolean
         #    mask, with inliers referenced by data[inlier_mask]
 
-        left = np.column_stack(data[:,:2], np.ones(len(data))).T
+        # Find the epipolar lines
+        left = np.column_stack((data[:,:2],
+                                np.ones(len(data)))).T
         epipolar_lines = np.dot(F, left)
-        epipolar_lines /= np.linalg.norm(epipolar_lines[:,:2], axis=1)
+
+        # Ensure that nx^2 + ny^2 = 1 for each epipolar line
+        norms = np.linalg.norm(epipolar_lines[:2,:], axis=0)
+        epipolar_lines /= norms
+
+        # For each right point, find the distance to the epipolar line
+        # obtained from its corresponding left point
+        right = np.column_stack((data[:,2:],
+                                 np.ones(len(data)))).T
+        assert right.shape == epipolar_lines.shape
+        distances = np.sum(right * epipolar_lines, axis=0)
+        inlier_mask = (distances < inlier_threshold)
+        inlier_count = np.count_nonzero(inlier_mask)
 
 
         #-----------------------------------------------------------------------
@@ -127,7 +166,7 @@ def ransac(data, inlier_threshold, confidence_threshold, max_num_trials):
             best_inlier_count = inlier_count
             best_inlier_ratio = inlier_count / float(len(data))
             best_inlier_mask = inlier_mask
-            best_model = model
+            best_F = F
 
             # if a perfect model was found, we're done
             if inlier_count == len(data):
@@ -157,6 +196,7 @@ def ransac(data, inlier_threshold, confidence_threshold, max_num_trials):
                 # (1 - (1 - e)^S)^N = 1 - p
                 # N * log(1 - (1 - e)^S) = log(1 - p)
                 N = np.log(1. - confidence_threshold) / denom
+                print N
 
                 # use min here because the computed maximum could be greater
                 # than max_num_trials
@@ -167,12 +207,15 @@ def ransac(data, inlier_threshold, confidence_threshold, max_num_trials):
     #---------------------------------------------------------------------------
     # 5) run a final fit on the F matrix using the inliers
 
+    inlier_data = data[best_inlier_mask]
+    F = hartley(inlier_data)
 
+    # sys.exit(0)
 
     #---------------------------------------------------------------------------
     # print some information about the results of RANSAC
 
-    inlier_ratio = best_inlier_count / len(data)
+    inlier_ratio = best_inlier_count / float(len(data))
 
     print "Iterations:", iter_count
     print "Inlier Ratio: {:.3f}".format(inlier_ratio)
