@@ -69,6 +69,7 @@ def plot_epipolar_inliers(image1_path, image2_path, keypoints1, keypoints2, F,
             (image1_inliers[i,0], image2_inliers[i,0] + offset),
             (image1_inliers[i,1], image2_inliers[i,1]),
             linewidth=1.0, c='g')
+    plt.savefig('InlierCorresp.png')
     
     #--------------------------------------------------------------------------
     # plot epipolar lines for the inliers
@@ -124,6 +125,9 @@ def plot_epipolar_inliers(image1_path, image2_path, keypoints1, keypoints2, F,
     x21, y21, x22, y22 = compute_endpoints(
         epi_lines2, image2.shape[1] - 1, image2.shape[0])
 
+    print keypoints1[:,0]
+    print keypoints2[:,0]
+
     plt.figure()
     plt.title("Inlier Epipolar Lines")
     plt.imshow(both_images)
@@ -134,6 +138,8 @@ def plot_epipolar_inliers(image1_path, image2_path, keypoints1, keypoints2, F,
         plt.plot((x11[i], x12[i]), (y11[i], y12[i]), linewidth=1.0, c='g')
         plt.plot((x21[i] + offset, x22[i] + offset), (y21[i], y22[i]),
                  linewidth=1.0, c='g')
+    plt.savefig('InlierEpipolarLines.png')
+
     
     #--------------------------------------------------------------------------
     # plot outliers
@@ -151,4 +157,5 @@ def plot_epipolar_inliers(image1_path, image2_path, keypoints1, keypoints2, F,
             (image1_outliers[i,1], image2_outliers[i,1]),
             linewidth=1.0, c='y')
 
-    plt.show()
+    # plt.show()
+    plt.savefig('OutlierCorresp.png')

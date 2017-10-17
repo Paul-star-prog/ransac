@@ -40,8 +40,8 @@ def ransac(data, inlier_threshold, confidence_threshold, max_num_trials):
         len(data), dtype=np.bool)
     best_F = np.zeros((3, 3))      # dummy initial model
 
-    # sample size S: TODO points are sampled for a Hartley model
-    S = 8 # TODO
+    # sample size S: 8 points are sampled for a Hartley model
+    S = 8
 
     def make_hartley_vector(p1, p2):
         u1, v1 = p1
@@ -96,11 +96,14 @@ def ransac(data, inlier_threshold, confidence_threshold, max_num_trials):
         T1 = compute_normalization_mat(points[:,:2])
         T2 = compute_normalization_mat(points[:,2:])
 
-        left_img_pts = apply_transform(T1, points[:,:2])[:2,:].T
-        right_img_pts = apply_transform(T1, points[:,2:])[:2,:].T
+        # left_img_pts = apply_transform(T1, points[:,:2])[:2,:].T
+        # right_img_pts = apply_transform(T1, points[:,2:])[:2,:].T
 
-        # np.mean(np.linalg.norm(left_img_pts, axis=1))
-        # np.mean(np.linalg.norm(right_img_pts, axis=1))
+        left_img_pts = normalize_points(points[:,:2])
+        right_img_pts = normalize_points(points[:,2:])
+
+        # print np.mean(np.linalg.norm(left_img_pts, axis=1))
+        # print np.mean(np.linalg.norm(right_img_pts, axis=1))
         # these two should be roughly sqrt(2)
 
         A = make_hartley_matrix(left_img_pts, right_img_pts)
@@ -200,7 +203,8 @@ def ransac(data, inlier_threshold, confidence_threshold, max_num_trials):
 
                 # use min here because the computed maximum could be greater
                 # than max_num_trials
-                max_iter = min(max_iter, N)
+                # max_iter = min(max_iter, N)
+                max_iter = N
 
 
 
